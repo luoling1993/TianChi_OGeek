@@ -235,6 +235,9 @@ class Processing(object):
         # combine features
         for idx, column1 in enumerate(labels_columns):
             for column2 in labels_columns[idx + 1:]:
+                if column1 in column2:
+                    continue
+
                 group_column = [column1, column2]
                 click_column = "{column}_click".format(column="_".join(group_column))
                 count_column = "{column}_count".format(column="_".join(group_column))
