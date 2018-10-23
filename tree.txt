@@ -1,25 +1,25 @@
-.
-©¦  .gitignore
-©¦  features_engineering.py
-©¦  lgb_models.py
-©¦  main.py
-©¦  predict.csv
-©¦  tree.txt
-©¦  utils.py
-©¦  w2v.bin
-©¦  w2v.py
-©¦  
-©¦          
-©À©¤data
-©¦  ©À©¤EtlData
-©¦  ©¦      test.csv
-©¦  ©¦      train.csv
-©¦  ©¦      validate.csv
-©¦  ©¦      
-©¦  ©¸©¤RawData
-©¦          oppo_round1_test_A.txt
-©¦          oppo_round1_train.txt
-©¦          oppo_round1_vali.txt
+ï»¿.
+â”‚  .gitignore
+â”‚  features_engineering.py
+â”‚  lgb_models.py
+â”‚  main.py
+â”‚  predict.csv
+â”‚  tree.txt
+â”‚  utils.py
+â”‚  w2v.bin
+â”‚  w2v.py
+â”‚  
+â”‚          
+â”œâ”€data
+â”‚  â”œâ”€EtlData
+â”‚  â”‚      test.csv
+â”‚  â”‚      train.csv
+â”‚  â”‚      validate.csv
+â”‚  â”‚      
+â”‚  â””â”€RawData
+â”‚          oppo_round1_test_A.txt
+â”‚          oppo_round1_train.txt
+â”‚          oppo_round1_vali.txt
        
 
         
