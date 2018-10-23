@@ -1,0 +1,25 @@
+.
+©¦  .gitignore
+©¦  features_engineering.py
+©¦  lgb_models.py
+©¦  main.py
+©¦  predict.csv
+©¦  tree.txt
+©¦  utils.py
+©¦  w2v.bin
+©¦  w2v.py
+©¦  
+©¦          
+©À©¤data
+©¦  ©À©¤EtlData
+©¦  ©¦      test.csv
+©¦  ©¦      train.csv
+©¦  ©¦      validate.csv
+©¦  ©¦      
+©¦  ©¸©¤RawData
+©¦          oppo_round1_test_A.txt
+©¦          oppo_round1_train.txt
+©¦          oppo_round1_vali.txt
+       
+
+        

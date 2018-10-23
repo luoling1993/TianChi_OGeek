@@ -10,7 +10,9 @@ import warnings
 import jieba
 import numpy as np
 import pandas as pd
+from gensim import matutils
 from gensim.models.keyedvectors import KeyedVectors
+from sklearn.cluster import MiniBatchKMeans
 
 from utils import char_cleaner, char_list_cheaner
 from w2v import build_model
@@ -28,6 +30,10 @@ w2v_model = KeyedVectors.load_word2vec_format("w2v.bin", binary=True, unicode_er
 
 
 class PrefixProcessing(object):
+    def __init__(self, prefix_w2v_df, title_w2v_df):
+        self.prefix_w2v_df = prefix_w2v_df.copy()
+        self.title_w2v_df = title_w2v_df.copy()
+
     @staticmethod
     def _is_in_title(item):
         prefix = item["prefix"]
@@ -81,25 +87,30 @@ class PrefixProcessing(object):
 
         return leven_distance / (length + 5)  # 平滑
 
-    @staticmethod
-    def _get_prefix_w2v(item):
-        prefix = item["prefix"]
-        title = item["title"]
-        if not isinstance(prefix, str):
-            prefix = "null"
+    def _get_prefix_w2v(self):
+        remove_columns = ['help_index', 'help_flag']
 
-        prefix_cut = list(jieba.cut(prefix))
-        title_cut = list(jieba.cut(title))
+        prefix_w2v_df = self.prefix_w2v_df.copy()
+        prefix_w2v_df = prefix_w2v_df.drop(columns=remove_columns)
 
-        prefix_cut = char_list_cheaner(prefix_cut)
-        title_cut = char_list_cheaner(title_cut)
+        title_w2v_df = self.title_w2v_df.copy()
+        title_w2v_df = title_w2v_df.drop(columns=remove_columns)
 
-        try:
-            w2v_similar = w2v_model.n_similarity(prefix_cut, title_cut)
-        except (KeyError, ZeroDivisionError):
-            w2v_similar = None
+        prefix_w2v_list = list()
+        for idx, prefix in prefix_w2v_df.items():
+            if not prefix[0]:
+                prefix_w2v_list.append(None)
+                continue
 
-        return w2v_similar
+            title = title_w2v_df.loc[idx]
+            if not title[0]:
+                prefix_w2v_list.append(None)
+                continue
+
+            similar = np.dot(prefix, title)
+            prefix_w2v_list.append(similar)
+
+        return prefix_w2v_list
 
     def get_prefix_df(self, df):
         prefix_df = pd.DataFrame()
@@ -108,18 +119,46 @@ class PrefixProcessing(object):
         prefix_df["is_in_title"] = prefix_df.apply(self._is_in_title, axis=1)
         prefix_df["leven_distance"] = prefix_df.apply(self._levenshtein_distance, axis=1)
         prefix_df["distance_rate"] = prefix_df.apply(self._distince_rate, axis=1)
-        prefix_df["prefix_w2v"] = prefix_df.apply(self._get_prefix_w2v, axis=1)
+        prefix_df["prefix_w2v"] = self._get_prefix_w2v()
         return prefix_df
 
 
 class QueryProcessing(object):
+    def __init__(self, title_w2v_df):
+        self.title_w2v_df = title_w2v_df.copy()
+        self.title_w2v_dict = self._get_title_w2v_dict()
+
+    def _get_title_w2v_dict(self):
+        title_w2v_df = self.title_w2v_df.copy()
+        title_w2v_df = title_w2v_df.drop(columns=['help_flag'])
+
+        title_w2v_dict = title_w2v_df.set_index('help_index').T.to_dict(orient='list')
+        return title_w2v_dict
 
     @staticmethod
-    def _get_w2v_similar(item):
+    def _get_jieba_array(words, size=500):
+        seg_cut = jieba.lcut(words)
+        seg_cut = char_list_cheaner(seg_cut)
+
+        w2v_array = list()
+        for word in seg_cut:
+            try:
+                similar_list = w2v_model[word]
+                w2v_array.append(similar_list)
+            except KeyError:
+                continue
+
+        if not w2v_array:
+            w2v_array = [None] * size
+        else:
+            w2v_array = matutils.unitvec(np.array(w2v_array).mean(axis=0))
+
+        return w2v_array
+
+    def _get_w2v_similar(self, item):
         item_dict = dict()
 
         query_predict = item["query_prediction"]
-        title = item["title"]
 
         if not query_predict:
             item_dict["max_similar"] = None
@@ -130,16 +169,12 @@ class QueryProcessing(object):
         similar_list = list()
         weight_similar_list = list()
 
-        title_cut = list(jieba.cut(title))
-        title_cut = char_list_cheaner(title_cut)
-        for key, value in query_predict.items():
-            query_cut = list(jieba.cut(key))
-            query_cut = char_list_cheaner(query_cut)
+        index = item.name
+        title_array = self.title_w2v_dict[index]
 
-            try:
-                w2v_similar = w2v_model.n_similarity(query_cut, title_cut)
-            except (KeyError, ZeroDivisionError):
-                w2v_similar = np.nan
+        for _, value in query_predict.iterrows():
+            query_cut_array = self._get_jieba_array(value)
+            w2v_similar = np.dot(query_cut_array, title_array)
 
             similar_list.append(w2v_similar)
             weight_w2v_similar = w2v_similar * float(value)
@@ -185,7 +220,7 @@ class Processing(object):
 
         train_df = df[:train_df_length]
 
-        labels_columns = ["prefix", "title", "tag"]
+        labels_columns = ["prefix", "title", "tag", 'prefix_kmeans', 'title_kmeans']
         for column in labels_columns:
             click_column = "{column}_click".format(column=column)
             count_column = "{column}_count".format(column=column)
@@ -213,6 +248,67 @@ class Processing(object):
 
         return df
 
+    @staticmethod
+    def _get_w2v_df(df, col, size=500):
+        w2v_df_list = list()
+        none_index_list = list()
+
+        for idx, item in df[col].items():
+            if item == 'null':
+                item_list = [None] * size
+                none_index_list.append(idx)
+                w2v_df_list.append(item_list)
+            elif not item:
+                item_list = [None] * size
+                none_index_list.append(idx)
+                w2v_df_list.append(item_list)
+            else:
+                seg_cut = jieba.lcut(item)
+                seg_cut = char_list_cheaner(seg_cut)
+
+                w2v_array = list()
+                for word in seg_cut:
+                    try:
+                        similar_list = w2v_model[word]
+                        w2v_array.append(similar_list)
+                    except KeyError:
+                        continue
+
+                if not w2v_array:
+                    item_list = [None] * size
+                    none_index_list.append(idx)
+                    w2v_df_list.append(item_list)
+                    continue
+                else:
+                    item_list = matutils.unitvec(np.array(w2v_array).mean(axis=0))
+                    w2v_df_list.append(item_list)
+
+        columns = ['{}_w2v_{}'.format(col, i) for i in range(size)]
+        w2v_df = pd.DataFrame(data=w2v_df_list, columns=columns)
+
+        w2v_df['help_index'] = w2v_df.index
+        w2v_df['help_flag'] = w2v_df['help_index'].apply(lambda _item: 0 if _item in none_index_list else 1)
+
+        return w2v_df
+
+    @staticmethod
+    def _get_kmeans_dict(df, size=20):
+        df = df.copy()
+        df = df[df['help_flag'] == 1]
+        help_index = df['help_inde'].tolist()
+
+        df = df.drop(columns=['help_index', 'help_flag'])
+
+        kmeans = MiniBatchKMeans(n_clusters=size, reassignment_ratio=0.001)
+        preds = kmeans.fit_predict(df)
+
+        kmeans_dict = dict(zip(help_index, preds))
+        return kmeans_dict
+
+    @staticmethod
+    def _mapping_kmeans(item, mapping_dict):
+        return mapping_dict.get(item, -1)
+
     def get_processing(self):
         train_df = self._get_data(name="train")
         validate_df = self._get_data(name="vali")
@@ -229,18 +325,29 @@ class Processing(object):
         df["prefix"] = df["prefix"].apply(char_cleaner)
         df["title"] = df["title"].apply(char_cleaner)
 
+        prefix_w2v_df = self._get_w2v_df(df, col='prefix')
+        title_w2v_df = self._get_w2v_df(df, col='title')
+
+        prefix_kmeans_dict = self._get_kmeans_dict(prefix_w2v_df)
+        title_kmeans_dict = self._get_kmeans_dict(title_w2v_df)
+        df['prefix_kmeans'] = prefix_w2v_df['help_index'].apply(self._mapping_kmeans, args=(prefix_kmeans_dict, ))
+        df['title_kmeans'] = title_w2v_df['help_index'].apply(self._mapping_kmeans, args=(title_kmeans_dict, ))
+
         df = self._get_ctr_df(df, train_df_length)
 
-        prefix_processing = PrefixProcessing()
+        prefix_processing = PrefixProcessing(prefix_w2v_df, title_w2v_df)
         prefix_df = prefix_processing.get_prefix_df(df)
 
-        query_processing = QueryProcessing()
+        query_processing = QueryProcessing(title_w2v_df)
         query_df = query_processing.get_query_df(df)
 
         df = pd.concat([df, prefix_df, query_df], axis=1)
 
-        drop_columns = ['prefix', 'query_prediction', 'title', 'tag']
+        drop_columns = ['prefix', 'query_prediction', 'title']
         df = df.drop(columns=drop_columns)
+
+        # one hot
+        df = pd.get_dummies(df, columns=['tag', 'prefix_kmeans', 'title_kmeans'])
 
         train_data = df[:train_df_length]
         train_data["label"] = train_data["label"].apply(int)

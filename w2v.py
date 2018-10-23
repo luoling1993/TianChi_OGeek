@@ -42,8 +42,7 @@ class MySentence(object):
 
     def __iter__(self):
         for sentence in get_sentence(self.fname):
-            seg_list = jieba.cut(sentence)
-            seg_list = list(seg_list)
+            seg_list = jieba.lcut(sentence)
             seg_list = char_list_cheaner(seg_list)
             if seg_list:
                 yield seg_list
@@ -52,7 +51,7 @@ class MySentence(object):
 def build_model(fname):
     sentences = MySentence(fname)
     model_name = "w2v.bin"
-    my_model = Word2Vec(sentences, size=500, window=5, sg=1, hs=1, min_count=2, workers=10)
+    my_model = Word2Vec(sentences, size=500, window=5, sg=1, hs=1, min_count=5, workers=10)
 
     my_model.wv.save_word2vec_format(model_name, binary=True)
 
