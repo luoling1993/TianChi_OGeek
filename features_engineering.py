@@ -13,6 +13,7 @@ import pandas as pd
 from gensim import matutils
 from gensim.models.keyedvectors import KeyedVectors
 from sklearn.cluster import MiniBatchKMeans
+from tqdm import tqdm
 
 from utils import char_cleaner, char_list_cheaner
 from w2v import build_model
@@ -22,6 +23,7 @@ warnings.filterwarnings('ignore')
 BASE_PATH = os.path.join(os.path.dirname(__file__), "data")
 RAW_DATA_PATH = os.path.join(BASE_PATH, "RawData")
 ETL_DATA_PATH = os.path.join(BASE_PATH, "EtlData")
+TEMP_DATA_PATH = os.path.join(BASE_PATH, "TempData")
 
 w2v_model_name = "./w2v.bin"
 if not os.path.exists(w2v_model_name):
@@ -252,43 +254,55 @@ class Processing(object):
         return df
 
     @staticmethod
-    def _get_w2v_df(df, col, size=500):
-        w2v_df_list = list()
-        none_index_list = list()
-
-        for idx, item in df[col].items():
-            if item == 'null':
-                item_list = [None] * size
-                none_index_list.append(idx)
-                w2v_df_list.append(item_list)
-            elif not item:
-                item_list = [None] * size
-                none_index_list.append(idx)
-                w2v_df_list.append(item_list)
-            else:
-                seg_cut = jieba.lcut(item)
-                seg_cut = char_list_cheaner(seg_cut)
-
-                w2v_array = list()
-                for word in seg_cut:
-                    try:
-                        similar_list = w2v_model[word]
-                        w2v_array.append(similar_list)
-                    except KeyError:
-                        continue
-
-                if not w2v_array:
-                    item_list = [None] * size
-                    none_index_list.append(idx)
-                    w2v_df_list.append(item_list)
-                    continue
-                else:
-                    item_list = matutils.unitvec(np.array(w2v_array).mean(axis=0))
-                    w2v_df_list.append(item_list)
+    def _to_csv(df, col, size):
+        file_name = '{col}_w2v.csv'.format(col=col)
+        file_path = os.path.join(TEMP_DATA_PATH, file_name)
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
         columns = ['{}_w2v_{}'.format(col, i) for i in range(size)]
-        w2v_df = pd.DataFrame(data=w2v_df_list, columns=columns)
+        none_index_list = list()
 
+        with open(file_path, 'a', encoding='utf-8') as f:
+            # write columns
+            f.write(','.join(columns) + '\n')
+
+            for idx, item in tqdm(df[col].items()):
+                if item == 'null':
+                    item_list = [''] * size
+                    none_index_list.append(idx)
+                elif not item:
+                    item_list = [''] * size
+                    none_index_list.append(idx)
+                else:
+                    seg_cut = jieba.lcut(item)
+                    seg_cut = char_list_cheaner(seg_cut)
+
+                    w2v_array = list()
+                    for word in seg_cut:
+                        try:
+                            similar_list = w2v_model[word]
+                            w2v_array.append(similar_list)
+                        except KeyError:
+                            pass
+
+                    if not w2v_array:
+                        item_list = [''] * size
+                        none_index_list.append(idx)
+                    else:
+                        item_list = matutils.unitvec(np.array(w2v_array).mean(axis=0))
+
+                f.write(','.join(map(str, item_list)) + '\n')
+
+        return none_index_list
+
+    def _get_w2v_df(self, df, col, size=500):
+        none_index_list = self._to_csv(df, col, size)
+
+        file_name = '{col}_w2v.csv'.format(col=col)
+        file_path = os.path.join(TEMP_DATA_PATH, file_name)
+
+        w2v_df = pd.read_csv(file_path, header=0)
         w2v_df['help_index'] = w2v_df.index
         w2v_df['help_flag'] = w2v_df['help_index'].apply(lambda _item: 0 if _item in none_index_list else 1)
 
@@ -298,7 +312,7 @@ class Processing(object):
     def _get_kmeans_dict(df, size=20):
         df = df.copy()
         df = df[df['help_flag'] == 1]
-        help_index = df['help_inde'].tolist()
+        help_index = df['help_index'].tolist()
 
         df = df.drop(columns=['help_index', 'help_flag'])
 
@@ -333,8 +347,8 @@ class Processing(object):
 
         prefix_kmeans_dict = self._get_kmeans_dict(prefix_w2v_df)
         title_kmeans_dict = self._get_kmeans_dict(title_w2v_df)
-        df['prefix_kmeans'] = prefix_w2v_df['help_index'].apply(self._mapping_kmeans, args=(prefix_kmeans_dict, ))
-        df['title_kmeans'] = title_w2v_df['help_index'].apply(self._mapping_kmeans, args=(title_kmeans_dict, ))
+        df['prefix_kmeans'] = prefix_w2v_df['help_index'].apply(self._mapping_kmeans, args=(prefix_kmeans_dict,))
+        df['title_kmeans'] = title_w2v_df['help_index'].apply(self._mapping_kmeans, args=(title_kmeans_dict,))
 
         df = self._get_ctr_df(df, train_df_length)
 

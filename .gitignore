@@ -107,4 +107,5 @@ ENV/
 reference/
 
 # data
-data/
+*.csv
+*.txt
