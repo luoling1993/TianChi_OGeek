@@ -261,7 +261,7 @@ class Processing(object):
             os.remove(file_path)
 
         columns = ['{}_w2v_{}'.format(col, i) for i in range(size)]
-        none_index_list = list()
+        none_index_set = set()
 
         with open(file_path, 'a', encoding='utf-8') as f:
             # write columns
@@ -270,10 +270,10 @@ class Processing(object):
             for idx, item in tqdm(df[col].items()):
                 if item == 'null':
                     item_list = [''] * size
-                    none_index_list.append(idx)
+                    none_index_set.add(idx)
                 elif not item:
                     item_list = [''] * size
-                    none_index_list.append(idx)
+                    none_index_set.add(idx)
                 else:
                     seg_cut = jieba.lcut(item)
                     seg_cut = char_list_cheaner(seg_cut)
@@ -288,23 +288,23 @@ class Processing(object):
 
                     if not w2v_array:
                         item_list = [''] * size
-                        none_index_list.append(idx)
+                        none_index_set.add(idx)
                     else:
                         item_list = matutils.unitvec(np.array(w2v_array).mean(axis=0))
 
                 f.write(','.join(map(str, item_list)) + '\n')
 
-        return none_index_list
+        return none_index_set
 
     def _get_w2v_df(self, df, col, size=500):
-        none_index_list = self._to_csv(df, col, size)
+        none_index_set = self._to_csv(df, col, size)
 
         file_name = '{col}_w2v.csv'.format(col=col)
         file_path = os.path.join(TEMP_DATA_PATH, file_name)
 
         w2v_df = pd.read_csv(file_path, header=0)
         w2v_df['help_index'] = w2v_df.index
-        w2v_df['help_flag'] = w2v_df['help_index'].apply(lambda _item: 0 if _item in none_index_list else 1)
+        w2v_df['help_flag'] = w2v_df['help_index'].apply(lambda _item: 0 if _item in none_index_set else 1)
 
         return w2v_df
 
