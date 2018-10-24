@@ -177,14 +177,13 @@ class QueryProcessing(object):
         for _, value in query_predict.items():
             query_cut_array = self._get_jieba_array(value)
 
-            if query_cut_array[0] is None:
+            try:
+                w2v_similar = np.dot(query_cut_array, title_array)
+                similar_list.append(w2v_similar)
+                weight_w2v_similar = w2v_similar * float(value)
+                weight_similar_list.append(weight_w2v_similar)
+            except TypeError:
                 continue
-
-            w2v_similar = np.dot(query_cut_array, title_array)
-
-            similar_list.append(w2v_similar)
-            weight_w2v_similar = w2v_similar * float(value)
-            weight_similar_list.append(weight_w2v_similar)
 
         if similar_list:
             max_similar = np.nanmax(similar_list)
@@ -198,7 +197,7 @@ class QueryProcessing(object):
             item_dict["max_similar"] = None
             item_dict["mean_similar"] = None
             item_dict["weight_similar"] = None
-            
+
         return item_dict
 
     def get_query_df(self, df):
