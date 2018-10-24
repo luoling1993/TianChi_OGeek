@@ -174,7 +174,7 @@ class QueryProcessing(object):
         index = item.name
         title_array = self.title_w2v_dict[index]
 
-        for _, value in query_predict.iterrows():
+        for _, value in query_predict.items():
             query_cut_array = self._get_jieba_array(value)
             w2v_similar = np.dot(query_cut_array, title_array)
 
