@@ -99,7 +99,7 @@ class PrefixProcessing(object):
         title_w2v_df = title_w2v_df.drop(columns=remove_columns)
 
         prefix_w2v_list = list()
-        for idx, prefix in prefix_w2v_df.items():
+        for idx, prefix in prefix_w2v_df.iterrows():
             if not prefix[0]:
                 prefix_w2v_list.append(None)
                 continue
