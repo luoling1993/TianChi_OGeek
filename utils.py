@@ -3,44 +3,40 @@
 import os
 import re
 
-import pandas as pd
+BASE_PATH = os.path.join(os.path.dirname(__file__), "data")
+ETL_DATA_PATH = os.path.join(BASE_PATH, "EtlData")
+RESOURCE_PATH = os.path.join('resources')
 
 
-def get_data(name):
-    etl_path = os.path.join("data", "EtlData")
+def get_stop_words():
+    stop_wrods_name = os.path.join(RESOURCE_PATH, 'stop_words.txt')
+    _stop_words_list = list()
+    with open(stop_wrods_name, encoding='utf-8') as f:
+        for line in f:
+            _stop_words_list.append(line.strip())
 
-    if name == "train":
-        file_name = "train.csv"
-    elif name == "validate":
-        file_name = "validate.csv"
-    elif name == "test":
-        file_name = "test.csv"
-    else:
-        raise FileNotFoundError()
+    _stop_words_set = set(_stop_words_list)
+    return _stop_words_set
 
-    data_name = os.path.join(etl_path, file_name)
 
-    df = pd.read_csv(data_name, header=0)
-
-    return df
+stop_words_set = get_stop_words()
 
 
 def char_cleaner(char):
     if not isinstance(char, str):
         char = "null"
-
-    pattern = re.compile("[^a-zA-Z\u4E00-\u9FA5 ]")
+    pattern = re.compile("[^0-9a-zA-Z\u4E00-\u9FA5 ]")
     char = re.sub(pattern, "", char)
     char = char.lower()
     return char
 
 
-def char_list_cheaner(char_list, stop_words=None):
+def char_list_cheaner(char_list):
     new_char_list = list()
     for char in char_list:
-        if len(char) <= 1:
+        if len(char) == 0:
             continue
-        if stop_words and char in stop_words:
+        if char in stop_words_set:
             continue
         new_char_list.append(char)
 
