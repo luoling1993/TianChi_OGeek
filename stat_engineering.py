@@ -271,6 +271,7 @@ class Processing(object):
                     if item_word not in predict_word_dict.keys():
                         predict_word_dict[item_word] = 0.0
                     predict_word_dict[item_word] += float(query_ratio)
+                    break
 
         if not predict_word_dict:
             return prefix
